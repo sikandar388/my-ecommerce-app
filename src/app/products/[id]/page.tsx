@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import useUser from "@/lib/hooks/useUser";
+import { useRouter } from "next/navigation";
 
 type Product = {
   id: string;
@@ -17,6 +18,7 @@ export default function ProductDetailPage() {
   const params = useParams();
   const user = useUser();
   const [product, setProduct] = useState<Product | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -33,18 +35,51 @@ export default function ProductDetailPage() {
   }, [params.id]);
 
   const handleAddToCart = async () => {
-    if (!user || !product) return;
+    if (!product) return;
 
-    const { error } = await supabase.from("cart_items").insert({
-      user_id: user.id,
-      product_id: product.id,
-      quantity: 1,
-    });
+    if (!user) {
+      router.push("/login");
+      return;
+    }
 
-    if (error) {
-      console.error("Add to cart failed:", error.message);
+    // Check if the item already exists in the cart
+    const { data: existingItem, error: fetchError } = await supabase
+      .from("cart_items")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("product_id", product.id)
+      .single();
+
+    if (fetchError && fetchError.code !== "PGRST116") {
+      console.error("Error fetching cart item:", fetchError.message);
+      return;
+    }
+
+    if (existingItem) {
+      // Item exists — update quantity
+      const { error: updateError } = await supabase
+        .from("cart_items")
+        .update({ quantity: existingItem.quantity + 1 })
+        .eq("id", existingItem.id);
+
+      if (updateError) {
+        console.error("Update failed:", updateError.message);
+      } else {
+        alert("Quantity updated in cart!");
+      }
     } else {
-      alert("Added to cart!");
+      // Item does not exist — insert new
+      const { error: insertError } = await supabase.from("cart_items").insert({
+        user_id: user.id,
+        product_id: product.id,
+        quantity: 1,
+      });
+
+      if (insertError) {
+        console.error("Add to cart failed:", insertError.message);
+      } else {
+        alert("Added to cart!");
+      }
     }
   };
 
@@ -68,7 +103,6 @@ export default function ProductDetailPage() {
       <button
         onClick={handleAddToCart}
         className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded"
-        disabled={!user}
       >
         Add to Cart
       </button>
