@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import useUser from "./useUser";
 
 export default function useCartCount() {
-  const user = useUser();
+  const { user, loading } = useUser();
   const [count, setCount] = useState<number>(0);
 
   useEffect(() => {
@@ -23,7 +23,7 @@ export default function useCartCount() {
     };
 
     fetchCartCount();
-  }, [user]);
+  }, [user, loading]);
 
   return count;
 }

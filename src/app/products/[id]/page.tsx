@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
-import useUser from "@/lib/hooks/useUser";
+import { use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
+import { X, ArrowLeft } from "lucide-react";
+import useUser from "@/lib/hooks/useUser";
 
 type Product = {
   id: string;
@@ -12,33 +12,46 @@ type Product = {
   description?: string;
   price: number;
   image_url?: string;
+  is_active: boolean;
+  stock: number;
 };
 
-export default function ProductDetailPage() {
-  const params = useParams();
-  const user = useUser();
+export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params); // ✅ unwrap the promise
   const [product, setProduct] = useState<Product | null>(null);
+  const [firstLoading, setFirstLoading] = useState(true);
   const router = useRouter();
+  const { user, loading } = useUser();
 
   useEffect(() => {
     const fetchProduct = async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("products")
         .select("*")
-        .eq("id", params.id)
+        .eq("id", id)
+        .eq("is_active", true)
         .single();
 
-      if (!error && data) setProduct(data);
+      if (data) {
+        setProduct(data);
+      }
+      setFirstLoading(false);
     };
 
     fetchProduct();
-  }, [params.id]);
+  }, [id]);
 
-  const handleAddToCart = async () => {
+    const handleAddToCart = async () => {
     if (!product) return;
 
     if (!user) {
       router.push("/login");
+      return;
+    }
+
+    // Check if product is out of stock (based on current local state)
+    if (product.stock <= 0) {
+      alert("This product is out of stock!");
       return;
     }
 
@@ -55,8 +68,8 @@ export default function ProductDetailPage() {
       return;
     }
 
+    // Update or insert item in cart
     if (existingItem) {
-      // Item exists — update quantity
       const { error: updateError } = await supabase
         .from("cart_items")
         .update({ quantity: existingItem.quantity + 1 })
@@ -64,11 +77,9 @@ export default function ProductDetailPage() {
 
       if (updateError) {
         console.error("Update failed:", updateError.message);
-      } else {
-        alert("Quantity updated in cart!");
+        return;
       }
     } else {
-      // Item does not exist — insert new
       const { error: insertError } = await supabase.from("cart_items").insert({
         user_id: user.id,
         product_id: product.id,
@@ -77,15 +88,85 @@ export default function ProductDetailPage() {
 
       if (insertError) {
         console.error("Add to cart failed:", insertError.message);
-      } else {
-        alert("Added to cart!");
+        return;
       }
     }
+
+    // Reduce stock in database
+    const { error: stockError } = await supabase
+      .from("products")
+      .update({ stock: product.stock - 1 })
+      .eq("id", product.id);
+
+    if (stockError) {
+      console.error("Stock update failed:", stockError.message);
+      return;
+    }
+
+    // Refresh local product state
+    const { data: updatedProduct } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", product.id)
+      .single();
+
+    if (updatedProduct) {
+      setProduct(updatedProduct);
+    }
+
+    alert("Item added to cart!");
   };
 
-  if (!product) return <p>Loading...</p>;
+  if (firstLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500 text-lg">Loading product details...</p>
+      </div>
+    );
+  }
 
-  return (
+  if (!product) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Product Details
+            </h1>
+            <p className="text-gray-600 mt-1">View product information</p>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-6 py-5">
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div className="p-10 text-center">
+              <div className="mx-auto flex items-center justify-center h-24 w-24 rounded-full bg-red-100">
+                <X className="h-12 w-12 text-red-600" />
+              </div>
+              <h2 className="mt-4 text-2xl font-bold text-gray-900">
+                Product Not Found
+              </h2>
+              <p className="mt-2 text-gray-600 max-w-md mx-auto">
+                The product you are looking for does not exist or may have been
+                removed or out of stock.
+              </p>
+              <div className="mt-4">
+                <button
+                  onClick={() => router.push("/")}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center space-x-2 mx-auto"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                  <span>Back to Products</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (loading) return <p>Loading...</p>;
+
+    return (
     <div className="max-w-3xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-4">{product.title}</h1>
 

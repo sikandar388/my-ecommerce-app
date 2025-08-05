@@ -5,15 +5,19 @@ import { supabase } from "@/lib/supabaseClient";
 import { ShoppingCart, Search } from "lucide-react";
 import Link from "next/link";
 import useCartCount from "@/lib/hooks/useCartCount";
+import useIsAdmin from "@/lib/hooks/useIsAdmin";
 
 export default function Header() {
-  const user = useUser();
+  // const user = useUser();
+  const { user, loading } = useUser();
   const cartCount = useCartCount();
+  const { isAdmin } = useIsAdmin();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.href = "/";
   };
+  if (loading) return null;
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm">
@@ -23,6 +27,29 @@ export default function Header() {
           <Link href="/" className="flex items-center space-x-2">
             <span className="text-2xl font-bold text-blue-600">ShopEase</span>
           </Link>
+          {isAdmin && (
+            <>
+            {/* <Link href="/admin" className="text-sm text-blue-600">
+              Admin Dashboard
+            </Link> */}
+            <Link href="/admin/products" className="text-sm text-blue-600">
+              Products
+            </Link>
+            <Link href="/admin/orders" className="text-sm text-blue-600">
+              Orders
+            </Link>
+            <Link href="/admin/users" className="text-sm text-blue-600">
+              Users
+            </Link>
+            <Link href="/admin/categories" className="text-sm text-blue-600">
+              Categories
+            </Link>
+            </>
+            
+          )}
+
+
+
 
           {/* Search Bar (Center) */}
           <div className="hidden md:flex flex-1 max-w-md mx-6">
@@ -50,6 +77,16 @@ export default function Header() {
                       {user?.email?.split("@")[0] || "User"}
                     </span>
                   </span>
+                  {!isAdmin &&  (
+                    <Link
+                    href="/orders"
+                    className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
+                  >
+                    Orders
+                  </Link>
+                  )
+
+                  }
                   <button
                     onClick={handleLogout}
                     className="text-sm text-gray-600 hover:text-red-600 transition-colors"
@@ -68,8 +105,8 @@ export default function Header() {
                 </>
               )}
             </div>
-
-            <Link href="/cart" className="p-2 relative">
+            {!isAdmin && (
+              <Link href="/cart" className="p-2 relative">
               <ShoppingCart className="text-gray-700" size={20} />
               {cartCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
@@ -77,6 +114,7 @@ export default function Header() {
                 </span>
               )}
             </Link>
+            )}
           </div>
         </div>
 

@@ -19,6 +19,7 @@ export default function HomePage() {
       const { data, error } = await supabase
         .from("products")
         .select("*")
+        .eq("is_active", true)
         .order("id", { ascending: true });
 
       if (error) console.error("Error fetching products:", error);
